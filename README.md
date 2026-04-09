@@ -38,23 +38,50 @@ This high-fidelity interactive prototype is built with modern web technologies:
 * **Interactions:** `@dnd-kit/core` (for drag-and-drop scheduling logic)
 
 ## Getting Started
-To run this prototype locally on your machine:
 
-1. **Clone the repository:**
+### Prerequisites
+- **Node.js** (version 16 or higher) — [Download here](https://nodejs.org/)
+- **Visual Studio Code** — [Download here](https://code.visualstudio.com/)
+- **Git** (optional, for cloning the repository)
+
+### Opening the Project in VS Code
+
+1. **Clone or download the repository:**
    ```bash
-   git clone [https://github.com/yourusername/max-registration-3.0.git](https://github.com/yourusername/max-registration-3.0.git)
-Install dependencies:
+   git clone <repository-url>
+   cd "MU Registration 3.0"
+   ```
+   Or simply open the folder in VS Code by dragging it to the VS Code window.
 
-Bash
-cd max-registration-3.0
-npm install
-Run the development server:
+2. **Open the project in VS Code:**
+   - Launch VS Code
+   - Use `File > Open Folder...` and select the project directory
+   - Or use the terminal: `code .`
 
-Bash
-npm run dev
+3. **Install dependencies:**
+   Open the integrated terminal in VS Code (`Ctrl+`` or `Cmd+`` on Mac) and run:
+   ```bash
+   npm install
+   ```
+   This installs React, Vite, and all required dependencies.
 
-# View the application:
-Open http://localhost:3000 in your browser.
+4. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+   The app will automatically open in your browser at **http://localhost:5173**
+
+5. **View and edit the code:**
+   - The main app component is located in `src/App.jsx`
+   - Styles are in `src/styles.css`
+   - Any changes you make will automatically refresh in the browser (hot module reloading enabled)
+
+### Build for Production
+To create an optimized production build:
+```bash
+npm run build
+```
+The output will be in the `dist/` folder.
  ITAN 440 Project Deliverables
 This repository houses the prototype for our course milestone deliverables:
 
