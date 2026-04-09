@@ -69,10 +69,10 @@ This repository houses the prototype for our course milestone deliverables:
 # The Team
 Tyler Brown
 
-[Team Member 2 Name]
+Norah Symone
 
-[Team Member 3 Name]
+Natalie Henry
 
-[Team Member 4 Name]
+Dana Maxwell
 
-[Team Member 5 Name]
+Nick Filemyr
