@@ -70,7 +70,7 @@ const COURSES = [
   ], description:"Covers atomic theory, chemical bonding, stoichiometry.", prerequisites:"No prerequisites required.", instructorBio:"Prof. Garcia has won multiple teaching awards." },
 ];
 
-const INIT_ENROLLED   = ["MATH301","ENG102","CS201"];
+const INIT_ENROLLED   = [];
 const INIT_WAITLISTED = {};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -434,7 +434,7 @@ function WishlistPanel({ wishlist, enrolled, waitlisted, onRemove, onAdd, onView
 }
 
 // ─── Advanced Search Panel ────────────────────────────────────────────────────
-function AdvancedSearch({ enrolled, waitlisted, onRegister, onView }) {
+function AdvancedSearch({ enrolled, waitlisted, onRegister, onView, wishlist, onWishlist }) {
   const [dept, setDept] = useState("All Departments");
   const [courseName, setCourseName] = useState("");
   const [courseNum, setCourseNum] = useState("");
@@ -545,8 +545,8 @@ function AdvancedSearch({ enrolled, waitlisted, onRegister, onView }) {
             {searched&&results.length>0&&<span style={{fontSize:11,color:MU.textMuted}}>Click row to view · Add to course bar</span>}
           </div>
           {results.length>0&&(
-            <div style={{display:"grid",gridTemplateColumns:"88px 1fr 88px 65px 115px",borderBottom:`1.5px solid ${MU.border}`,background:MU.cream,flexShrink:0}}>
-              {["Course #","Course Name","Open Seats","Credits","Action"].map((h,i)=><div key={h} style={{padding:"7px 13px",fontSize:10,fontWeight:800,color:MU.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",borderLeft:i>0?`1px solid ${MU.border}`:"none"}}>{h}</div>)}
+            <div style={{display:"grid",gridTemplateColumns:"88px 1fr 88px 65px 44px 115px",borderBottom:`1.5px solid ${MU.border}`,background:MU.cream,flexShrink:0}}>
+              {["Course #","Course Name","Open Seats","Credits","","Action"].map((h,i)=><div key={h} style={{padding:"7px 13px",fontSize:10,fontWeight:800,color:MU.textMuted,letterSpacing:"0.07em",textTransform:"uppercase",borderLeft:i>0?`1px solid ${MU.border}`:"none"}}>{h}</div>)}
             </div>
           )}
           <div style={{flex:1,overflowY:"auto"}}>
@@ -556,8 +556,9 @@ function AdvancedSearch({ enrolled, waitlisted, onRegister, onView }) {
               const cc=C(course.code);const isE=enrolled.includes(course.id);const inBar=courseBar.includes(course.id);
               const sc=course.seats===0?"#EF4444":course.seats<8?"#D97706":"#059669";
               const labEx=!!expandedLabs[course.id];
+              const isWL=wishlist.includes(course.id);
               return <div key={course.id} style={{borderBottom:idx<results.length-1?`1px solid ${MU.border}`:"none"}}>
-                <div style={{display:"grid",gridTemplateColumns:"88px 1fr 88px 65px 115px",background:idx%2===0?"#fff":"#FDFDFB",cursor:"pointer",transition:"background 0.12s"}} onMouseEnter={e=>e.currentTarget.style.background=MU.goldLight} onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?"#fff":"#FDFDFB"} onClick={()=>onView(course)}>
+                <div style={{display:"grid",gridTemplateColumns:"88px 1fr 88px 65px 44px 115px",background:idx%2===0?"#fff":"#FDFDFB",cursor:"pointer",transition:"background 0.12s"}} onMouseEnter={e=>e.currentTarget.style.background=MU.goldLight} onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?"#fff":"#FDFDFB"} onClick={()=>onView(course)}>
                   <div style={{padding:"10px 13px",display:"flex",alignItems:"center"}}><span style={{fontWeight:800,fontSize:11,color:cc.text,background:cc.bg,border:`1px solid ${cc.border}`,padding:"2px 6px",borderRadius:5}}>{course.code}</span></div>
                   <div style={{padding:"10px 13px",borderLeft:`1px solid ${MU.border}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:2}}>
                     <span style={{fontSize:13,fontWeight:600,color:MU.textPrimary,lineHeight:1.3}}>{course.name}</span>
@@ -566,6 +567,19 @@ function AdvancedSearch({ enrolled, waitlisted, onRegister, onView }) {
                   </div>
                   <div style={{padding:"10px 13px",borderLeft:`1px solid ${MU.border}`,display:"flex",alignItems:"center"}}><div><div style={{fontSize:14,fontWeight:800,color:sc}}>{course.seats}</div><div style={{fontSize:10,color:MU.textMuted}}>of {course.totalSeats}</div></div></div>
                   <div style={{padding:"10px 13px",borderLeft:`1px solid ${MU.border}`,display:"flex",alignItems:"center"}}><span style={{fontSize:13,fontWeight:700,color:MU.textSecond}}>{course.credits} cr</span></div>
+                  {/* Wishlist heart column */}
+                  <div onClick={e=>e.stopPropagation()} style={{borderLeft:`1px solid ${MU.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <button
+                      onClick={()=>onWishlist(course.id)}
+                      title={isWL?"Remove from Wishlist":"Add to Wishlist"}
+                      style={{background:"none",border:"none",cursor:"pointer",padding:"6px",display:"flex",alignItems:"center",justifyContent:"center",color:isWL?"#E11D48":MU.borderDark,transition:"color 0.15s, transform 0.15s",borderRadius:5}}
+                      onMouseEnter={e=>{e.currentTarget.style.color=isWL?"#9F1239":"#E11D48";e.currentTarget.style.transform="scale(1.2)";}}
+                      onMouseLeave={e=>{e.currentTarget.style.color=isWL?"#E11D48":MU.borderDark;e.currentTarget.style.transform="scale(1)";}}>
+                      <svg width="15" height="15" viewBox="0 0 14 14" fill={isWL?"#E11D48":"none"}>
+                        <path d="M7 12S2 8.5 2 5.5A3 3 0 0 1 7 3.5a3 3 0 0 1 5 2c0 3-5 6.5-5 6.5Z" stroke={isWL?"#E11D48":"currentColor"} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
                   <div onClick={e=>e.stopPropagation()} style={{padding:"10px 11px",borderLeft:`1px solid ${MU.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
                     {isE?<span style={{fontSize:11,fontWeight:700,color:"#10B981",background:"#ECFDF5",padding:"3px 9px",borderRadius:20,border:"1px solid #A7F3D0"}}>✓ Enrolled</span>
                       :inBar?<span style={{fontSize:11,fontWeight:700,color:MU.goldDark,background:MU.goldLight,padding:"3px 9px",borderRadius:20,border:`1px solid ${MU.goldMid}`}}>In Bar</span>
@@ -1016,7 +1030,7 @@ export default function App() {
           <div style={{flex:1,display:"flex",justifyContent:"center"}}>
             <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.1)",borderRadius:9,padding:3,gap:2}}>
               {tabBtn("schedule","📅 My Schedule")}
-              {tabBtn("search","🔍 Course Search")}
+              {tabBtn("search","🔍 Advanced Search")}
             </div>
           </div>
           {/* Semester + help */}
@@ -1047,7 +1061,7 @@ export default function App() {
             <div style={{padding:"12px 14px 10px",borderBottom:`1px solid ${MU.border}`,flexShrink:0}}>
               {/* Mode toggle pills */}
               <div style={{display:"flex",background:MU.cream,borderRadius:9,padding:3,gap:2,marginBottom:10}}>
-                {[["search","🔍 Course Search"],["wishlist","♥ Wishlist"]].map(([mode,label])=>(
+                {[["search","🔍 Quick Search"],["wishlist","♥ Wishlist"]].map(([mode,label])=>(
                   <button key={mode} onClick={()=>setSidebarMode(mode)}
                     style={{flex:1,padding:"6px 0",fontSize:12,fontWeight:700,background:sidebarMode===mode?"#fff":"transparent",color:sidebarMode===mode?MU.black:MU.textMuted,border:"none",borderRadius:6,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s",boxShadow:sidebarMode===mode?"0 1px 4px rgba(0,0,0,0.1)":"none",position:"relative"}}>
                     {label}
@@ -1063,7 +1077,7 @@ export default function App() {
               {sidebarMode==="search"&&(
                 <div style={{position:"relative"}}>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}><circle cx="6" cy="6" r="4.5" stroke={MU.textMuted} strokeWidth="1.3"/><path d="M9.5 9.5L12 12" stroke={MU.textMuted} strokeWidth="1.3" strokeLinecap="round"/></svg>
-                  <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search courses..." style={{width:"100%",boxSizing:"border-box",padding:"8px 11px 8px 30px",background:MU.cream,border:`1.5px solid ${MU.border}`,borderRadius:8,fontSize:13,color:MU.textPrimary,fontFamily:"'DM Sans',sans-serif",outline:"none"}} onFocus={e=>e.target.style.borderColor=MU.gold} onBlur={e=>e.target.style.borderColor=MU.border}/>
+                  <input value={search} onChange={e=>setSearch(e.target.value)} autoComplete="off" placeholder="Search courses..." style={{width:"100%",boxSizing:"border-box",padding:"8px 11px 8px 30px",background:MU.cream,border:`1.5px solid ${MU.border}`,borderRadius:8,fontSize:13,color:MU.textPrimary,fontFamily:"'DM Sans',sans-serif",outline:"none"}} onFocus={e=>e.target.style.borderColor=MU.gold} onBlur={e=>e.target.style.borderColor=MU.border}/>
                 </div>
               )}
               {/* Wishlist preview hint */}
@@ -1205,7 +1219,7 @@ export default function App() {
                   <p style={{margin:0,fontSize:13,color:MU.textMuted}}>{semester} — Filter by department, name, number, or gen ed</p>
                 </div>
                 <div style={{flex:1,minHeight:0}}>
-                  <AdvancedSearch enrolled={enrolled} waitlisted={waitlisted} onRegister={handleRegister} onView={setSelectedCourse}/>
+                  <AdvancedSearch enrolled={enrolled} waitlisted={waitlisted} onRegister={handleRegister} onView={setSelectedCourse} wishlist={wishlist} onWishlist={toggleWishlist}/>
                 </div>
               </div>
             )}
