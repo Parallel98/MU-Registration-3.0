@@ -374,10 +374,53 @@ function WishlistPanel({ wishlist, enrolled, waitlisted, onRemove, onAdd, onView
     );
   }
 
+  // Courses that can actually be added (not enrolled, not full, no conflict)
+  const addableCourses = wishlistedCourses.filter(course => {
+    const isEnrolled = enrolled.includes(course.id);
+    const isFull = course.seats === 0;
+    const { timeConflicts, missingPrereqs } = checkConflicts(course, enrolled);
+    const hasConflict = !isEnrolled && (timeConflicts.length > 0 || missingPrereqs.length > 0);
+    return !isEnrolled && !isFull && !hasConflict;
+  });
+  const canAddAll = addableCourses.length > 0;
+
+  function handleAddAll() {
+    if (!canAddAll) return;
+    addableCourses.forEach(course => onAdd(course.id));
+  }
+
   return (
     <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{fontSize:11,color:MU.textMuted,fontWeight:600,padding:"2px 4px",letterSpacing:"0.03em"}}>
-        {wishlistedCourses.length} saved course{wishlistedCourses.length!==1?"s":""} — previewing on schedule
+      {/* Header row: count + Add All button */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 4px"}}>
+        <div style={{fontSize:11,color:MU.textMuted,fontWeight:600,letterSpacing:"0.03em"}}>
+          {wishlistedCourses.length} saved course{wishlistedCourses.length!==1?"s":""} — previewing on schedule
+        </div>
+        <button
+          onClick={handleAddAll}
+          disabled={!canAddAll}
+          title={canAddAll ? `Add ${addableCourses.length} eligible course${addableCourses.length!==1?"s":""} to your schedule` : "No eligible courses to add"}
+          style={{
+            display:"flex",alignItems:"center",gap:5,
+            padding:"5px 10px",
+            background:canAddAll?`linear-gradient(135deg,${MU.black},#2a2a2a)`:MU.cream,
+            color:canAddAll?MU.gold:MU.textMuted,
+            border:canAddAll?"none":`1px solid ${MU.border}`,
+            borderRadius:6,fontSize:11,fontWeight:700,
+            cursor:canAddAll?"pointer":"not-allowed",
+            fontFamily:"'DM Sans',sans-serif",
+            transition:"filter 0.15s",flexShrink:0,
+            opacity:canAddAll?1:0.65,
+          }}
+          onMouseEnter={e=>{if(canAddAll)e.currentTarget.style.filter="brightness(1.15)";}}
+          onMouseLeave={e=>e.currentTarget.style.filter="none"}>
+          {/* Stack-of-cards icon */}
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <rect x="1" y="3" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M3 3V2.5A.5.5 0 013.5 2h5a.5.5 0 01.5.5V3" stroke="currentColor" strokeWidth="1.3"/>
+          </svg>
+          Add All{canAddAll?` (${addableCourses.length})`:""}
+        </button>
       </div>
       {wishlistedCourses.map(course => {
         const c = C(course.code);
@@ -955,6 +998,253 @@ function ScheduleGeneratorPage({ enrolled, waitlisted, semester, onClose }) {
   );
 }
 
+// ─── MaraudAudit Panel ──────────────────────────────────────────────────────
+const GEN_ED_REQS = [
+  { id:"WI",  label:"Writing Intensive",             abbr:"WI",  required:2, courseIds:["ENG102"],          color:"#10B981", bg:"#ECFDF5", border:"#A7F3D0" },
+  { id:"QR",  label:"Quantitative Reasoning",        abbr:"QR",  required:2, courseIds:["CS101","MATH301","PHYS201","CHEM101","CS201","CS301"], color:"#3B82F6", bg:"#EFF6FF", border:"#BFDBFE" },
+  { id:"SB",  label:"Social & Behavioral Sciences",  abbr:"SB",  required:1, courseIds:[],                  color:"#8B5CF6", bg:"#F5F3FF", border:"#DDD6FE" },
+  { id:"NS",  label:"Natural Sciences",              abbr:"NS",  required:2, courseIds:["PHYS201","BIO110","CHEM101"], color:"#059669", bg:"#F0FDF4", border:"#BBF7D0" },
+  { id:"HU",  label:"Humanities",                    abbr:"HU",  required:1, courseIds:["ENG102","HIST101"],  color:"#D97706", bg:"#FFFBEB", border:"#FDE68A" },
+  { id:"AR",  label:"Arts",                          abbr:"AR",  required:1, courseIds:[],                  color:"#EC4899", bg:"#FDF2F8", border:"#FBCFE8" },
+  { id:"GM",  label:"Global & Multicultural",        abbr:"GM",  required:1, courseIds:["HIST101"],          color:"#EF4444", bg:"#FEF2F2", border:"#FECACA" },
+  { id:"FYS", label:"First Year Seminar",             abbr:"FYS", required:1, courseIds:[],                  color:"#F59E0B", bg:"#FFFBEB", border:"#FDE68A" },
+];
+
+const MAJOR_REQS = [
+  { category:"Core Foundation", courses:[
+    { code:"CS 101", name:"Intro to Computer Science", credits:3, id:"CS101" },
+    { code:"CS 201", name:"Data Structures",           credits:4, id:"CS201" },
+    { code:"MATH 301", name:"Linear Algebra",          credits:3, id:"MATH301" },
+  ]},
+  { category:"Upper Division CS", courses:[
+    { code:"CS 301", name:"Algorithms",                credits:3, id:"CS301" },
+    { code:"CS 350", name:"Operating Systems",         credits:3, id:null },
+    { code:"CS 401", name:"Software Engineering",      credits:3, id:null },
+    { code:"CS 410", name:"Database Systems",          credits:3, id:null },
+  ]},
+  { category:"Science Requirements", courses:[
+    { code:"PHYS 201", name:"Physics I",               credits:4, id:"PHYS201" },
+    { code:"CHEM 101", name:"General Chemistry I",     credits:4, id:"CHEM101" },
+  ]},
+  { category:"General Electives", courses:[
+    { code:"ENG 102", name:"English Composition",      credits:3, id:"ENG102" },
+    { code:"HIST 101", name:"World History",           credits:3, id:"HIST101" },
+    { code:"Any 300+ CS Elective", name:"",           credits:3, id:null },
+  ]},
+];
+
+function MaraudAuditPanel({ enrolled, onClose }) {
+  const [vis, setVis] = useState(false);
+  const [activeSection, setActiveSection] = useState("genEd");
+
+  useEffect(()=>{
+    requestAnimationFrame(()=>setVis(true));
+    const fn = e=>{if(e.key==="Escape")close();};
+    window.addEventListener("keydown",fn);
+    return ()=>window.removeEventListener("keydown",fn);
+  },[]);
+  function close(){setVis(false);setTimeout(onClose,320);}
+
+  const enrolledCourses = COURSES.filter(c=>enrolled.includes(c.id));
+  const enrolledGenEds = enrolledCourses.flatMap(c=>c.genEd);
+
+  // Compute Gen Ed completion
+  const genEdStatus = GEN_ED_REQS.map(req=>{
+    const completed = req.courseIds.filter(id=>enrolled.includes(id)).length;
+    const pct = Math.min(100, Math.round((completed/req.required)*100));
+    return {...req, completed, pct, done: completed>=req.required};
+  });
+  const genEdDone = genEdStatus.filter(r=>r.done).length;
+  const genEdTotal = genEdStatus.length;
+
+  // Compute Major completion
+  const majorDone = MAJOR_REQS.flatMap(cat=>cat.courses).filter(c=>c.id&&enrolled.includes(c.id)).length;
+  const majorTotal = MAJOR_REQS.flatMap(cat=>cat.courses).length;
+
+  // Overall progress
+  const totalDone = genEdDone + majorDone;
+  const totalReqs = genEdTotal + majorTotal;
+  const overallPct = Math.round((totalDone/totalReqs)*100);
+
+  const sectionBtn = (id, label, count, total) => (
+    <button onClick={()=>setActiveSection(id)}
+      style={{flex:1,padding:"8px 4px",background:activeSection===id?"#fff":"transparent",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700,color:activeSection===id?MU.black:MU.textMuted,boxShadow:activeSection===id?"0 1px 4px rgba(0,0,0,0.1)":"none",transition:"all 0.15s",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+      {label}
+      <span style={{fontSize:10,fontWeight:600,color:activeSection===id?MU.goldDark:MU.textMuted}}>{count}/{total} done</span>
+    </button>
+  );
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div onClick={close} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(17,17,17,0.3)",opacity:vis?1:0,transition:"opacity 0.32s",backdropFilter:"blur(2px)"}}/>
+
+      {/* Panel */}
+      <div style={{position:"fixed",top:0,right:0,bottom:0,width:"clamp(340px,30vw,480px)",background:"#fff",boxShadow:"-8px 0 48px rgba(0,0,0,0.18)",zIndex:201,transform:vis?"translateX(0)":"translateX(100%)",transition:"transform 0.32s cubic-bezier(0.32,0,0,1)",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden"}}>
+
+        {/* Gold accent bar */}
+        <div style={{height:4,background:`linear-gradient(90deg,${MU.gold},${MU.goldDark},#E11D48)`,flexShrink:0}}/>
+
+        {/* Header */}
+        <div style={{background:MU.black,padding:"16px 20px",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                {/* Cap/diploma icon */}
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M9 2L1 6l8 4 8-4-8-4Z" fill={MU.gold} stroke={MU.gold} strokeWidth="0.5" strokeLinejoin="round"/>
+                  <path d="M1 6v5" stroke={MU.gold} strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M5 9.8v3.5c0 0 1.5 1.2 4 1.2s4-1.2 4-1.2V9.8" stroke="rgba(255,255,255,0.7)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span style={{fontSize:16,fontWeight:800,color:"#fff",letterSpacing:"-0.01em"}}>MaraudAudit™</span>
+                <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:10,background:"rgba(238,177,17,0.2)",color:MU.gold,border:`1px solid rgba(238,177,17,0.4)`,letterSpacing:"0.05em"}}>BETA</span>
+              </div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Degree Audit · CS — Computer Science</div>
+            </div>
+            <button onClick={close} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:7,color:"#fff",width:30,height:30,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.1)"}>
+              ✕
+            </button>
+          </div>
+
+          {/* Overall progress ring area */}
+          <div style={{background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:14}}>
+            {/* Circular progress */}
+            <div style={{position:"relative",width:54,height:54,flexShrink:0}}>
+              <svg width="54" height="54" viewBox="0 0 54 54" style={{transform:"rotate(-90deg)"}}>
+                <circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5"/>
+                <circle cx="27" cy="27" r="22" fill="none" stroke={MU.gold} strokeWidth="5"
+                  strokeDasharray={`${2*Math.PI*22}`}
+                  strokeDashoffset={`${2*Math.PI*22*(1-overallPct/100)}`}
+                  strokeLinecap="round"
+                  style={{transition:"stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+              </svg>
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <span style={{fontSize:12,fontWeight:800,color:"#fff"}}>{overallPct}%</span>
+              </div>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Overall Progress</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:6}}>{totalDone} of {totalReqs} requirements met</div>
+              <div style={{height:4,background:"rgba(255,255,255,0.1)",borderRadius:4,overflow:"hidden"}}>
+                <div style={{width:`${overallPct}%`,height:"100%",background:`linear-gradient(90deg,${MU.gold},${MU.goldDark})`,borderRadius:4,transition:"width 0.8s cubic-bezier(0.34,1.56,0.64,1)"}}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section toggle */}
+        <div style={{display:"flex",background:MU.cream,borderBottom:`1px solid ${MU.border}`,padding:"8px 12px",gap:4,flexShrink:0}}>
+          {sectionBtn("genEd","Gen Ed Requirements",genEdDone,genEdTotal)}
+          {sectionBtn("major","Major Requirements",majorDone,majorTotal)}
+        </div>
+
+        {/* Scrollable content */}
+        <div style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
+
+          {/* ── Gen Ed ── */}
+          {activeSection==="genEd" && (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:11,color:MU.textMuted,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase",marginBottom:2}}>
+                Millersville Gen Ed Program — {genEdDone}/{genEdTotal} areas satisfied
+              </div>
+              {genEdStatus.map(req=>{
+                const completedCourses = req.courseIds.filter(id=>enrolled.includes(id)).map(id=>COURSES.find(c=>c.id===id)).filter(Boolean);
+                return (
+                  <div key={req.id} style={{background:req.done?req.bg:"#fff",border:`1.5px solid ${req.done?req.border:MU.border}`,borderLeft:`4px solid ${req.done?req.color:MU.borderDark}`,borderRadius:10,padding:"11px 13px",transition:"all 0.2s"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:7}}>
+                        {/* Status icon */}
+                        <div style={{width:18,height:18,borderRadius:"50%",background:req.done?req.color:MU.cream,border:`2px solid ${req.done?req.color:MU.borderDark}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          {req.done
+                            ? <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            : <div style={{width:5,height:5,borderRadius:"50%",background:MU.borderDark}}></div>
+                          }
+                        </div>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:req.done?req.color:MU.textPrimary,lineHeight:1.2}}>{req.label}</div>
+                          <div style={{fontSize:10,color:MU.textMuted}}>{req.completed}/{req.required} course{req.required!==1?"s":""} required</div>
+                        </div>
+                      </div>
+                      <span style={{fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:10,background:req.done?req.color:MU.cream,color:req.done?"#fff":MU.textMuted,border:`1px solid ${req.done?req.color:MU.border}`}}>
+                        {req.abbr}
+                      </span>
+                    </div>
+                    {/* Progress bar */}
+                    <div style={{height:3,background:req.done?`${req.color}30`:MU.border,borderRadius:3,overflow:"hidden",marginBottom:req.done&&completedCourses.length>0?6:0}}>
+                      <div style={{width:`${req.pct}%`,height:"100%",background:req.color,borderRadius:3,transition:"width 0.6s ease"}}></div>
+                    </div>
+                    {/* Completed courses chips */}
+                    {completedCourses.length>0&&(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:5}}>
+                        {completedCourses.map(c=>{
+                          const cc=C(c.code);
+                          return <span key={c.id} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:10,background:cc.bg,color:cc.text,border:`1px solid ${cc.border}`}}>✓ {c.code}</span>;
+                        })}
+                      </div>
+                    )}
+                    {!req.done&&(
+                      <div style={{marginTop:6,fontSize:10,color:MU.textMuted,fontStyle:"italic"}}>
+                        {req.required-req.completed} more course{req.required-req.completed!==1?"s":""} needed
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Major ── */}
+          {activeSection==="major" && (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{fontSize:11,color:MU.textMuted,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase",marginBottom:2}}>
+                B.S. Computer Science — {majorDone}/{majorTotal} courses completed
+              </div>
+              {MAJOR_REQS.map(cat=>(
+                <div key={cat.category}>
+                  <div style={{fontSize:10,fontWeight:800,color:MU.textSecond,letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:7,paddingLeft:2,borderLeft:`3px solid ${MU.gold}`,paddingLeft:8}}>{cat.category}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {cat.courses.map((course,idx)=>{
+                      const done = course.id && enrolled.includes(course.id);
+                      const inProgress = false; // could check waitlisted
+                      return (
+                        <div key={idx} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:done?"#ECFDF5":"#FAFAF7",border:`1px solid ${done?"#A7F3D0":MU.border}`,borderRadius:9,transition:"all 0.15s"}}>
+                          {/* Checkbox */}
+                          <div style={{width:18,height:18,borderRadius:5,background:done?"#10B981":"#fff",border:`2px solid ${done?"#10B981":MU.borderDark}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            {done&&<svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:700,color:done?"#065F46":MU.textPrimary,lineHeight:1.2}}>
+                              {course.code}{course.name?` — ${course.name}`:""}
+                            </div>
+                            <div style={{fontSize:10,color:MU.textMuted,marginTop:1}}>{course.credits} credits</div>
+                          </div>
+                          <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:8,background:done?"#D1FAE5":MU.cream,color:done?"#059669":MU.textMuted,border:`1px solid ${done?"#A7F3D0":MU.border}`,flexShrink:0,whiteSpace:"nowrap"}}>
+                            {done?"✓ Done":"Needed"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer CTA */}
+        <div style={{borderTop:`1px solid ${MU.border}`,padding:"12px 16px",background:MU.cream,flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:11,color:MU.textMuted}}>Last synced: <strong style={{color:MU.textSecond}}>Spring 2026</strong></div>
+            <button onClick={close} style={{padding:"7px 16px",background:MU.black,color:MU.gold,border:"none",borderRadius:7,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}} onMouseEnter={e=>e.currentTarget.style.filter="brightness(1.2)"} onMouseLeave={e=>e.currentTarget.style.filter="none"}>
+              Close Audit
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [semester, setSemester] = useState(SEMESTERS[0]);
@@ -970,6 +1260,7 @@ export default function App() {
   const [hoveredCard, setHoveredCard] = useState(null);
   const [search, setSearch] = useState("");
   const [toasts, setToasts] = useState([]);
+  const [showAudit, setShowAudit] = useState(false);
 
   function toggleWishlist(courseId) {
     setWishlist(p => p.includes(courseId) ? p.filter(id=>id!==courseId) : [...p, courseId]);
@@ -1047,6 +1338,18 @@ export default function App() {
                 </div>
               )}
             </div>
+            {/* MaraudAudit button */}
+            <button onClick={()=>setShowAudit(true)}
+              style={{display:"flex",alignItems:"center",gap:6,padding:"6px 13px",background:"rgba(238,177,17,0.12)",border:`1.5px solid rgba(238,177,17,0.45)`,borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,color:MU.gold,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s",whiteSpace:"nowrap"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(238,177,17,0.22)";e.currentTarget.style.boxShadow=`0 0 0 2px rgba(238,177,17,0.25)`;}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(238,177,17,0.12)";e.currentTarget.style.boxShadow="none";}}>
+              {/* Cap icon */}
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M7 2L1 5.5l6 3.5 6-3.5L7 2Z" fill={MU.gold} strokeLinejoin="round"/>
+                <path d="M1 5.5v3.5" stroke={MU.gold} strokeWidth="1.2" strokeLinecap="round"/>
+                <path d="M3.5 8v2.5s1.2 1 3.5 1 3.5-1 3.5-1V8" stroke={MU.gold} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              View MaraudAudit
+            </button>
             {/* Help button */}
             <button style={{width:32,height:32,borderRadius:"50%",background:MU.gold,border:"none",color:MU.black,fontSize:15,fontWeight:800,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
           </div>
@@ -1229,6 +1532,7 @@ export default function App() {
 
       {selectedCourse&&<SlideOver course={selectedCourse} enrolled={enrolled} onClose={()=>setSelectedCourse(null)} onRegister={handleRegister}/>}
       {showGenerator&&<ScheduleGeneratorPage enrolled={enrolled} waitlisted={waitlisted} semester={semester} onClose={()=>setShowGenerator(false)}/>}
+      {showAudit&&<MaraudAuditPanel enrolled={enrolled} onClose={()=>setShowAudit(false)}/>}
       <ToastStack toasts={toasts} onDismiss={dismissToast}/>
 
       <style>{`
