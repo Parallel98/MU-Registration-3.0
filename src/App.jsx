@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { loadCourses, buildDepartments, buildGenEdAttrs } from "./courseLoader";
 
 // ─── Brand ────────────────────────────────────────────────────────────────────
 const MU = {
@@ -25,53 +26,19 @@ const DAY_KEYS = ["mon","tue","wed","thu","fri"];
 const HOURS = [8,9,10,11,12,13,14,15,16,17];
 const HOUR_HEIGHT = 76;
 
-const DEPARTMENTS = ["All Departments","Computer Science (CS)","Mathematics (MATH)","English (ENG)","Physics (PHYS)","History (HIST)","Biology (BIO)","Chemistry (CHEM)","Sociology (SOC)","Psychology (PSYC)","Art (ART)","Music (MUS)"];
-const GEN_ED_ATTRS = ["Writing Intensive (WI)","Quantitative Reasoning (QR)","Social & Behavioral Sciences (SB)","Natural Sciences (NS)","Humanities (HU)","Arts (AR)","Global & Multicultural (GM)","First Year Seminar (FYS)"];
+// DEPARTMENTS, GEN_ED_ATTRS, and COURSES are now loaded dynamically from CSV.
+// They are passed as props or accessed via module-level refs set after loading.
+const FALLBACK_COLOR = { bg:"#F8FAFC", border:"#E2E8F0", text:"#475569", accent:"#64748B", chip:"#94A3B8" };
+const C = (course) => (course && course._color) ? course._color : FALLBACK_COLOR;
 
-const COLORS = {
-  "CS 101":  { bg:"#EEF2FF", border:"#C7D2FE", text:"#3730A3", accent:"#4F46E5", chip:"#6366F1" },
-  "CS 201":  { bg:"#FFF7ED", border:"#FED7AA", text:"#9A3412", accent:"#EA580C", chip:"#F97316" },
-  "MATH 301":{ bg:"#F5F3FF", border:"#DDD6FE", text:"#5B21B6", accent:"#7C3AED", chip:"#8B5CF6" },
-  "ENG 102": { bg:"#ECFDF5", border:"#A7F3D0", text:"#065F46", accent:"#059669", chip:"#10B981" },
-  "PHYS 201":{ bg:"#FFF0F6", border:"#FBCFE8", text:"#831843", accent:"#DB2777", chip:"#EC4899" },
-  "HIST 110":{ bg:"#FFFBEB", border:"#FDE68A", text:"#78350F", accent:"#D97706", chip:"#F59E0B" },
-  "BIO 110": { bg:"#F0FDF4", border:"#BBF7D0", text:"#14532D", accent:"#16A34A", chip:"#22C55E" },
-  "CHEM 101":{ bg:"#FFF5F0", border:"#FECBA1", text:"#7C2D12", accent:"#EA580C", chip:"#F97316" },
-  "CS 301":  { bg:"#F8FAFC", border:"#CBD5E1", text:"#475569", accent:"#64748B", chip:"#94A3B8" },
-  "HIST 101":{ bg:"#FFFBEB", border:"#FDE68A", text:"#78350F", accent:"#D97706", chip:"#F59E0B" },
-};
-const C = (code) => COLORS[code] || { bg:"#F8FAFC", border:"#E2E8F0", text:"#475569", accent:"#64748B", chip:"#94A3B8" };
-
-const COURSES = [
-  { id:"CS101",   code:"CS 101",   format:"In-Person",   name:"Introduction to Computer Science", department:"Computer Science (CS)",  genEd:["Quantitative Reasoning (QR)"],                         instructor:"Dr. Smith",    credits:3, seats:12, totalSeats:30, schedule:{days:["mon","wed","fri"],start:9.0, end:10.0}, room:"Caputo Hall 101",        displayTime:"MWF 9:00-10:00 AM",  prereqIds:[], labs:null,
-    description:"A comprehensive introduction to the fundamental concepts of programming and computational thinking.", prerequisites:"No prerequisites required.", instructorBio:"Dr. Smith holds a PhD in Computer Science from Penn State." },
-  { id:"CS201",   code:"CS 201",   format:"In-Person",   name:"Data Structures",                  department:"Computer Science (CS)",  genEd:["Quantitative Reasoning (QR)"],                         instructor:"Dr. Johnson", credits:4, seats:5,  totalSeats:25, schedule:{days:["tue","thu"],      start:14.0,end:15.5}, room:"Caputo Hall 201",        displayTime:"TTh 2:00-3:30 PM",   prereqIds:["CS101"], labs:null,
-    description:"An in-depth study of fundamental data structures.", prerequisites:"CS 101 — Introduction to Computer Science", instructorBio:"Dr. Johnson researches algorithms and data structures." },
-  { id:"MATH301", code:"MATH 301", format:"In-Person",   name:"Linear Algebra",                   department:"Mathematics (MATH)",     genEd:["Quantitative Reasoning (QR)"],                         instructor:"Prof. Williams",credits:3,seats:20, totalSeats:35, schedule:{days:["mon","wed","fri"],start:11.0,end:12.0}, room:"Roddy Science Center 101",displayTime:"MWF 11:00-12:00 PM", prereqIds:[], labs:null,
-    description:"Covers vector spaces, linear transformations, matrices, determinants, eigenvalues, and eigenvectors.", prerequisites:"No prerequisites required.", instructorBio:"Prof. Williams connects abstract mathematics to real-world applications." },
-  { id:"ENG102",  code:"ENG 102",  format:"100% Online", name:"English Composition",              department:"English (ENG)",          genEd:["Writing Intensive (WI)","Humanities (HU)"],            instructor:"Dr. Brown",   credits:3, seats:8,  totalSeats:28, schedule:{days:["tue","thu"],      start:10.0,end:11.5}, room:"Stayer Hall 205",        displayTime:"TTh 10:00-11:30 AM", prereqIds:[], labs:null,
-    description:"Develops critical writing and analytical reading skills.", prerequisites:"No prerequisites required.", instructorBio:"Dr. Brown is an award-winning essayist." },
-  { id:"PHYS201", code:"PHYS 201", format:"In-Person",   name:"Physics I",                        department:"Physics (PHYS)",         genEd:["Natural Sciences (NS)","Quantitative Reasoning (QR)"], instructor:"Dr. Davis",   credits:4, seats:15, totalSeats:30, schedule:{days:["mon","wed","fri"],start:13.0,end:14.0}, room:"Roddy Science Center 301",displayTime:"MWF 1:00-2:00 PM",   prereqIds:[], labs:[
-    { id:"PHYS201-L1", label:"Lab A — Mon 3:00–5:00 PM", room:"Roddy 302", seats:10, totalSeats:14 },
-    { id:"PHYS201-L2", label:"Lab B — Wed 3:00–5:00 PM", room:"Roddy 302", seats:4,  totalSeats:14 },
-    { id:"PHYS201-L3", label:"Lab C — Fri 2:00–4:00 PM", room:"Roddy 303", seats:0,  totalSeats:14 },
-  ], description:"Newtonian mechanics, kinematics, dynamics, work, energy, momentum.", prerequisites:"No prerequisites required.", instructorBio:"Dr. Davis is a theoretical physicist." },
-  { id:"CS301",   code:"CS 301",   format:"In-Person",   name:"Algorithms",                       department:"Computer Science (CS)",  genEd:["Quantitative Reasoning (QR)"],                         instructor:"Prof. Martinez",credits:3,seats:0, totalSeats:25, schedule:{days:["tue","thu"],      start:16.0,end:17.5}, room:"Caputo Hall 303",        displayTime:"TTh 4:00-5:30 PM",   prereqIds:["CS201"], labs:null,
-    description:"Design and analysis of algorithms, complexity theory, and problem-solving strategies.", prerequisites:"CS 201 — Data Structures", instructorBio:"Prof. Martinez specializes in computational complexity." },
-  { id:"HIST101", code:"HIST 101", format:"100% Online", name:"World History",                    department:"History (HIST)",         genEd:["Humanities (HU)","Global & Multicultural (GM)"],       instructor:"Dr. Patel",   credits:3, seats:18, totalSeats:40, schedule:{days:["mon","wed"],      start:14.0,end:15.5}, room:"Stayer Hall 110",        displayTime:"MW 2:00-3:30 PM",    prereqIds:[], labs:null,
-    description:"A survey of global civilizations from prehistory to the modern era.", prerequisites:"No prerequisites required.", instructorBio:"Dr. Patel specializes in South Asian and Islamic history." },
-  { id:"BIO110",  code:"BIO 110",  format:"In-Person",   name:"Introduction to Biology",          department:"Biology (BIO)",          genEd:["Natural Sciences (NS)"],                               instructor:"Dr. Nguyen",  credits:3, seats:22, totalSeats:35, schedule:{days:["mon","wed","fri"],start:8.0, end:9.0},  room:"Roddy Science Center 104",displayTime:"MWF 8:00-9:00 AM",   prereqIds:[], labs:[
-    { id:"BIO110-L1", label:"Lab A — Tue 1:00–3:00 PM", room:"Roddy 110", seats:8,  totalSeats:16 },
-    { id:"BIO110-L2", label:"Lab B — Thu 1:00–3:00 PM", room:"Roddy 110", seats:12, totalSeats:16 },
-  ], description:"An introductory survey of biological principles.", prerequisites:"No prerequisites required.", instructorBio:"Dr. Nguyen studies marine microbial ecosystems." },
-  { id:"CHEM101", code:"CHEM 101", format:"In-Person",   name:"General Chemistry I",              department:"Chemistry (CHEM)",       genEd:["Natural Sciences (NS)","Quantitative Reasoning (QR)"], instructor:"Prof. Garcia",credits:4, seats:14, totalSeats:30, schedule:{days:["tue","thu"],      start:10.0,end:11.5}, room:"Roddy Science Center 201",displayTime:"TTh 10:00-11:30 AM", prereqIds:[], labs:[
-    { id:"CHEM101-L1", label:"Lab A — Mon 2:00–5:00 PM", room:"Roddy 210", seats:6, totalSeats:12 },
-    { id:"CHEM101-L2", label:"Lab B — Wed 2:00–5:00 PM", room:"Roddy 210", seats:2, totalSeats:12 },
-  ], description:"Covers atomic theory, chemical bonding, stoichiometry.", prerequisites:"No prerequisites required.", instructorBio:"Prof. Garcia has won multiple teaching awards." },
-];
+// COURSES is now loaded dynamically — see App component below.
+// This module-level ref is updated once loading completes so helper functions
+// like checkConflicts() and timesOverlap() that close over COURSES still work.
+let COURSES = [];
 
 const INIT_ENROLLED   = [];
 const INIT_WAITLISTED = {};
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timesOverlap(a, b) {
@@ -157,7 +124,7 @@ function ToastStack({ toasts, onDismiss }) {
 // ─── Slide-Over Drawer ────────────────────────────────────────────────────────
 function SlideOver({ course, enrolled, onClose, onRegister }) {
   const [vis, setVis] = useState(false);
-  const c = C(course.code);
+  const c = C(course);
   const isEnrolled = enrolled.includes(course.id);
   const { timeConflicts, missingPrereqs } = checkConflicts(course, enrolled);
   const hasConflict = !isEnrolled && (timeConflicts.length>0||missingPrereqs.length>0);
@@ -250,7 +217,7 @@ function SlideOver({ course, enrolled, onClose, onRegister }) {
 
 // ─── Course Card (sidebar) ────────────────────────────────────────────────────
 function CourseCard({ course, enrolled, waitlisted, wishlist, onView, onAdd, onWishlist, hovered, onHover, onHoverEnd }) {
-  const c = C(course.code);
+  const c = C(course);
   const isEnrolled = enrolled.includes(course.id);
   const isWL = !!waitlisted[course.id];
   const isFull = course.seats === 0;
@@ -423,7 +390,7 @@ function WishlistPanel({ wishlist, enrolled, waitlisted, onRemove, onAdd, onView
         </button>
       </div>
       {wishlistedCourses.map(course => {
-        const c = C(course.code);
+        const c = C(course);
         const isEnrolled = enrolled.includes(course.id);
         const isFull = course.seats === 0;
         const { timeConflicts, missingPrereqs } = checkConflicts(course, enrolled);
@@ -477,7 +444,7 @@ function WishlistPanel({ wishlist, enrolled, waitlisted, onRemove, onAdd, onView
 }
 
 // ─── Advanced Search Panel ────────────────────────────────────────────────────
-function AdvancedSearch({ enrolled, waitlisted, onRegister, onView, wishlist, onWishlist }) {
+function AdvancedSearch({ enrolled, waitlisted, onRegister, onView, wishlist, onWishlist, departments, genEdAttrs }) {
   const [dept, setDept] = useState("All Departments");
   const [courseName, setCourseName] = useState("");
   const [courseNum, setCourseNum] = useState("");
@@ -521,7 +488,7 @@ function AdvancedSearch({ enrolled, waitlisted, onRegister, onView, wishlist, on
               </button>
               {deptOpen&&(
                 <div style={{position:"absolute",top:"calc(100% + 3px)",left:0,right:0,background:"#fff",border:`1.5px solid ${MU.border}`,borderRadius:9,boxShadow:"0 8px 28px rgba(0,0,0,0.12)",zIndex:60,maxHeight:220,overflowY:"auto"}}>
-                  {DEPARTMENTS.map(d=><button key={d} onClick={()=>{setDept(d);setDeptOpen(false);}} style={{display:"block",width:"100%",textAlign:"left",padding:"8px 13px",background:d===dept?MU.goldLight:"transparent",border:"none",cursor:"pointer",fontSize:12,color:d===dept?MU.goldDark:MU.textPrimary,fontWeight:d===dept?700:400,fontFamily:"'DM Sans',sans-serif",borderLeft:d===dept?`3px solid ${MU.gold}`:"3px solid transparent"}} onMouseEnter={e=>{if(d!==dept)e.currentTarget.style.background=MU.cream;}} onMouseLeave={e=>{if(d!==dept)e.currentTarget.style.background="transparent";}}>{d}</button>)}
+                  {(departments||[]).map(d=><button key={d} onClick={()=>{setDept(d);setDeptOpen(false);}} style={{display:"block",width:"100%",textAlign:"left",padding:"8px 13px",background:d===dept?MU.goldLight:"transparent",border:"none",cursor:"pointer",fontSize:12,color:d===dept?MU.goldDark:MU.textPrimary,fontWeight:d===dept?700:400,fontFamily:"'DM Sans',sans-serif",borderLeft:d===dept?`3px solid ${MU.gold}`:"3px solid transparent"}} onMouseEnter={e=>{if(d!==dept)e.currentTarget.style.background=MU.cream;}} onMouseLeave={e=>{if(d!==dept)e.currentTarget.style.background="transparent";}}>{d}</button>)}
                 </div>
               )}
             </div>
@@ -539,7 +506,7 @@ function AdvancedSearch({ enrolled, waitlisted, onRegister, onView, wishlist, on
               <span style={lbl}>Gen Ed <span style={{textTransform:"none",fontWeight:400,letterSpacing:0}}>(optional)</span></span>
               <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style={{transform:genEdOpen?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><path d="M2.5 4.5l3 3 3-3" stroke={MU.textMuted} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
-            {genEdOpen&&GEN_ED_ATTRS.map(attr=>{
+            {genEdOpen&&(genEdAttrs||[]).map(attr=>{
               const chk=selGenEd.includes(attr);
               return <div key={attr} onClick={()=>setSelGenEd(p=>p.includes(attr)?p.filter(a=>a!==attr):[...p,attr])} style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",padding:"5px 9px",borderRadius:6,background:chk?MU.goldLight:"transparent",marginBottom:3}}>
                 <div style={{width:14,height:14,borderRadius:3,border:`2px solid ${chk?MU.gold:MU.borderDark}`,background:chk?MU.gold:"#fff",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -570,7 +537,7 @@ function AdvancedSearch({ enrolled, waitlisted, onRegister, onView, wishlist, on
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {courseBar.map(cid=>{
                 const course=COURSES.find(c=>c.id===cid);if(!course)return null;
-                const cc=C(course.code);const isE=enrolled.includes(cid);
+                const cc=C(course);const isE=enrolled.includes(cid);
                 const {timeConflicts:tc,missingPrereqs:mp}=checkConflicts(course,enrolled);
                 const hc=!isE&&(tc.length>0||mp.length>0);
                 return <div key={cid} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 9px",background:cc.bg,border:`1.5px solid ${cc.border}`,borderRadius:7}}>
@@ -596,7 +563,7 @@ function AdvancedSearch({ enrolled, waitlisted, onRegister, onView, wishlist, on
             {!searched&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:40,textAlign:"center"}}><div style={{width:48,height:48,borderRadius:"50%",background:MU.goldLight,border:`2px solid ${MU.goldMid}`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12,fontSize:20}}>🔍</div><div style={{fontSize:14,fontWeight:700,color:MU.textSecond,marginBottom:5}}>Find Your Courses</div><div style={{fontSize:13,color:MU.textMuted,lineHeight:1.6}}>Use the filters to search by department, name, number, or gen ed.</div></div>}
             {searched&&results.length===0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:40,textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:MU.textSecond,marginBottom:5}}>No courses matched</div><div style={{fontSize:13,color:MU.textMuted}}>Try broadening your search.</div></div>}
             {results.map((course,idx)=>{
-              const cc=C(course.code);const isE=enrolled.includes(course.id);const inBar=courseBar.includes(course.id);
+              const cc=C(course);const isE=enrolled.includes(course.id);const inBar=courseBar.includes(course.id);
               const sc=course.seats===0?"#EF4444":course.seats<8?"#D97706":"#059669";
               const labEx=!!expandedLabs[course.id];
               const isWL=wishlist.includes(course.id);
@@ -753,7 +720,7 @@ function ScheduleGeneratorPage({ enrolled, waitlisted, semester, onClose }) {
                 </div>
                 <div style={{display:"flex",gap:10}}>
                   {enrolledCourses.map(c=>{
-                    const cc=C(c.code);
+                    const cc=C(c);
                     return <div key={c.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:600,color:cc.text}}>
                       <div style={{width:10,height:10,borderRadius:3,background:cc.accent,flexShrink:0}}/>
                       {c.code}
@@ -782,7 +749,7 @@ function ScheduleGeneratorPage({ enrolled, waitlisted, semester, onClose }) {
                       const col=DAY_KEYS.indexOf(day); if(col===-1) return null;
                       const top=(course.schedule.start-PRINT_HOURS[0])*PRINT_H;
                       const h=(course.schedule.end-course.schedule.start)*PRINT_H-3;
-                      const c=C(course.code);
+                      const c=C(course);
                       return (
                         <div key={`pg-${course.id}-${day}`}
                           style={{position:"absolute",top,height:h,left:`calc(56px + ${col} * ((100% - 56px) / 5) + 3px)`,width:`calc((100% - 56px) / 5 - 6px)`,background:c.bg,border:`1.5px solid ${c.border}`,borderLeft:`4px solid ${c.accent}`,borderRadius:7,padding:"5px 7px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
@@ -805,7 +772,7 @@ function ScheduleGeneratorPage({ enrolled, waitlisted, semester, onClose }) {
               <div style={{fontSize:16,fontWeight:800,color:MU.black,letterSpacing:"-0.02em",marginBottom:14,paddingLeft:2}}>Enrolled Courses — Full Detail</div>
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 {enrolledCourses.map((course,idx)=>{
-                  const c=C(course.code);
+                  const c=C(course);
                   const seatPct=((course.totalSeats-course.seats)/course.totalSeats)*100;
                   return (
                     <div key={course.id} style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,0.06)",border:`1px solid ${MU.border}`}}>
@@ -906,7 +873,7 @@ function ScheduleGeneratorPage({ enrolled, waitlisted, semester, onClose }) {
                 </thead>
                 <tbody>
                   {enrolledCourses.map((course,i)=>{
-                    const c=C(course.code);
+                    const c=C(course);
                     return (
                       <tr key={course.id} style={{background:i%2===0?"#fff":"#FDFDFB"}}>
                         <td style={{padding:"10px 14px",fontSize:12,color:MU.textMuted,fontWeight:700,borderTop:`1px solid ${MU.border}`}}>{i+1}</td>
@@ -1177,7 +1144,7 @@ function MaraudAuditPanel({ enrolled, onClose }) {
                     {completedCourses.length>0&&(
                       <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:5}}>
                         {completedCourses.map(c=>{
-                          const cc=C(c.code);
+                          const cc=C(c);
                           return <span key={c.id} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:10,background:cc.bg,color:cc.text,border:`1px solid ${cc.border}`}}>✓ {c.code}</span>;
                         })}
                       </div>
@@ -1252,10 +1219,42 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("schedule");
   const [enrolled, setEnrolled] = useState(INIT_ENROLLED);
   const [waitlisted] = useState(INIT_WAITLISTED);
-  const [wishlist, setWishlist] = useState(["PHYS201","CS301"]);
+  const [wishlist, setWishlist] = useState([]);
   const [sidebarMode, setSidebarMode] = useState("search");
-  const [holdDismissed, setHoldDismissed] = useState(false);
+  const [holdDismissed, setHoldDismissed] = useState(true);
   const [showGenerator, setShowGenerator] = useState(false);
+
+  // ── CSV course loading ──
+  const [overlayGone, setOverlayGone] = useState(false);   // true = overlay fully removed
+  const [overlayFading, setOverlayFading] = useState(false); // true = fade-out in progress
+  const [coursesError, setCoursesError] = useState(null);
+  const [DEPARTMENTS, setDepartments] = useState(["All Departments"]);
+  const [GEN_ED_ATTRS, setGenEdAttrs] = useState([]);
+
+  useEffect(() => {
+    const startTime = Date.now();
+    loadCourses()
+      .then(courses => {
+        // Update the module-level COURSES ref so all helper functions work
+        COURSES.length = 0;
+        courses.forEach(c => COURSES.push(c));
+        setDepartments(buildDepartments(courses));
+        setGenEdAttrs(buildGenEdAttrs(courses));
+        // Enforce a minimum 1-second extra hold before fading out
+        const elapsed = Date.now() - startTime;
+        const minHold = 1000;
+        const remaining = Math.max(0, minHold - elapsed);
+        setTimeout(() => {
+          setOverlayFading(true);                          // start CSS fade-out
+          setTimeout(() => setOverlayGone(true), 650);    // remove from DOM after fade
+        }, remaining);
+      })
+      .catch(err => {
+        console.error("Failed to load courses:", err);
+        setCoursesError(err.message || "Unknown error");
+      });
+  }, []);
+
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [hoveredCard, setHoveredCard] = useState(null);
   const [search, setSearch] = useState("");
@@ -1299,10 +1298,26 @@ export default function App() {
     </button>
   );
 
+
+  // ── Loading screen ──
+  if (coursesError) {
+    return (
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet"/>
+        <div style={{height:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:MU.black,fontFamily:"'DM Sans',sans-serif",gap:16}}>
+          <MULogo size={52}/>
+          <div style={{fontSize:16,fontWeight:700,color:"#EF4444",marginTop:8}}>Failed to load course catalog</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",maxWidth:400,textAlign:"center",lineHeight:1.6}}>{coursesError}</div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet"/>
       <div style={{height:"100vh",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",background:MU.cream,overflow:"hidden"}}>
+
 
         {/* Hold Banner */}
         {!holdDismissed&&<HoldBanner onDismiss={()=>setHoldDismissed(true)}/>}
@@ -1457,7 +1472,7 @@ export default function App() {
                         const col=DAY_KEYS.indexOf(day); if(col===-1) return null;
                         const top=timeFrac(course.schedule.start)*HOUR_HEIGHT;
                         const h=(timeFrac(course.schedule.end)-timeFrac(course.schedule.start))*HOUR_HEIGHT-4;
-                        const c=C(course.code);
+                        const c=C(course);
                         const isWL=!!waitlisted[course.id];
                         const wlBg="repeating-linear-gradient(45deg,#FFFBEB 0px,#FFFBEB 8px,#FEF3C7 8px,#FEF3C7 16px)";
                         return (
@@ -1490,7 +1505,7 @@ export default function App() {
                       const ghostConflict = ghostTC.length > 0;
                       return ghostCourse.schedule.days.map(day=>{
                         const col=DAY_KEYS.indexOf(day); if(col===-1) return null;
-                        const c=C(ghostCourse.code);
+                        const c= C(ghostCourse);
                         const top=timeFrac(ghostCourse.schedule.start)*HOUR_HEIGHT;
                         const h=(timeFrac(ghostCourse.schedule.end)-timeFrac(ghostCourse.schedule.start))*HOUR_HEIGHT-4;
                         const isWishlistMode = sidebarMode === "wishlist";
@@ -1522,7 +1537,7 @@ export default function App() {
                   <p style={{margin:0,fontSize:13,color:MU.textMuted}}>{semester} — Filter by department, name, number, or gen ed</p>
                 </div>
                 <div style={{flex:1,minHeight:0}}>
-                  <AdvancedSearch enrolled={enrolled} waitlisted={waitlisted} onRegister={handleRegister} onView={setSelectedCourse} wishlist={wishlist} onWishlist={toggleWishlist}/>
+                  <AdvancedSearch enrolled={enrolled} waitlisted={waitlisted} onRegister={handleRegister} onView={setSelectedCourse} wishlist={wishlist} onWishlist={toggleWishlist} departments={DEPARTMENTS} genEdAttrs={GEN_ED_ATTRS}/>
                 </div>
               </div>
             )}
@@ -1535,8 +1550,29 @@ export default function App() {
       {showAudit&&<MaraudAuditPanel enrolled={enrolled} onClose={()=>setShowAudit(false)}/>}
       <ToastStack toasts={toasts} onDismiss={dismissToast}/>
 
+      {/* ── Loading overlay (fixed; fades out over app) ── */}
+      {!overlayGone && (
+        <div style={{
+          position:"fixed",inset:0,zIndex:9999,
+          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+          background:MU.black,fontFamily:"'DM Sans',sans-serif",gap:20,
+          opacity: overlayFading ? 0 : 1,
+          transition: overlayFading ? "opacity 0.65s ease" : "none",
+          pointerEvents: overlayFading ? "none" : "all",
+        }}>
+          <MULogo size={56}/>
+          <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Playfair Display',serif",letterSpacing:"-0.02em"}}>Millersville University</div>
+          <div style={{fontSize:11,color:MU.gold,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",marginTop:-10}}>Course Registration</div>
+          <div style={{marginTop:16,display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <div style={{width:40,height:40,border:"3px solid rgba(238,177,17,0.2)",borderTopColor:MU.gold,borderRadius:"50%",animation:"mu-spin 0.8s linear infinite"}}/>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>{overlayFading ? "Ready!" : "Loading course catalog…"}</div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         * { box-sizing: border-box; }
+        @keyframes mu-spin{to{transform:rotate(360deg)}}
         input::placeholder { color: #9E9782; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
