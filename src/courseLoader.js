@@ -250,6 +250,10 @@ export async function loadCourses() {
     // Color palette — cycle through deterministically by subject
     const palette = COLOR_PALETTES[strSeed(subj) % COLOR_PALETTES.length];
 
+    // Deterministic 5-digit CRN — separate seed so other synthetic fields are unchanged
+    const crnRng = seededRng(strSeed(id + "_crn"));
+    const crn = String(10000 + Math.floor(crnRng() * 90000));
+
     courses.push({
       id,
       code,
@@ -270,6 +274,7 @@ export async function loadCourses() {
       prerequisites,
       instructorBio: `${instructor} is a faculty member in the ${subj} department at Millersville University.`,
       level,
+      crn,
       _color: palette,
     });
 
